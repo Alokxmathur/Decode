@@ -1,10 +1,8 @@
 package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
-
-@Autonomous(name="Far Red Auto", group="Jr")
+@com.qualcomm.robotcore.eventloop.opmode.Autonomous(name="Mid Blue Auto", group="Jr")
 //@Disabled
-public class MidBlueAuto extends FarAuto {
+public class MidBlueAuto extends Autonomous {
     @Override
     public void runOpMode() {
         super.setAlliance(Match.Alliance.Blue);
