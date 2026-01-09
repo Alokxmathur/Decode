@@ -27,76 +27,19 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-package org.firstinspires.ftc.robotcontroller.external.samples;
+package org.firstinspires.ftc.teamcode;
 
-import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
-import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
-import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
-import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 
-/*
- *  This OpMode illustrates the concept of driving an autonomous path based on Gyro (IMU) heading and encoder counts.
- *  The code is structured as a LinearOpMode
- *
- *  The path to be followed by the robot is built from a series of drive, turn or pause steps.
- *  Each step on the path is defined by a single function call, and these can be strung together in any order.
- *
- *  The code REQUIRES that you have encoders on the drive motors, otherwise you should use: RobotAutoDriveByTime;
- *
- *  This code uses the Universal IMU interface so it will work with either the BNO055, or BHI260 IMU.
- *  To run as written, the Control/Expansion hub should be mounted horizontally on a flat part of the robot chassis.
- *  The REV Logo should be facing UP, and the USB port should be facing forward.
- *  If this is not the configuration of your REV Control Hub, then the code should be modified to reflect the correct orientation.
- *
- *  This sample requires that the drive Motors have been configured with names : left_drive and right_drive.
- *  It also requires that a positive power command moves both motors forward, and causes the encoders to count UP.
- *  So please verify that both of your motors move the robot forward on the first move.  If not, make the required correction.
- *  See the beginning of runOpMode() to set the FORWARD/REVERSE option for each motor.
- *
- *  This code uses RUN_TO_POSITION mode for driving straight, and RUN_USING_ENCODER mode for turning and holding.
- *  Note: This code implements the requirement of calling setTargetPosition() at least once before switching to RUN_TO_POSITION mode.
- *
- *  Notes:
- *
- *  All angles are referenced to the coordinate-frame that is set whenever resetHeading() is called.
- *  In this sample, the heading is reset when the Start button is touched on the Driver Station.
- *  Note: It would be possible to reset the heading after each move, but this would accumulate steering errors.
- *
- *  The angle of movement/rotation is assumed to be a standardized rotation around the robot Z axis,
- *  which means that a Positive rotation is Counter Clockwise, looking down on the field.
- *  This is consistent with the FTC field coordinate conventions set out in the document:
- *  https://ftc-docs.firstinspires.org/field-coordinate-system
- *
- *  Control Approach.
- *
- *  To reach, or maintain a required heading, this code implements a basic Proportional Controller where:
- *
- *      Steering power = Heading Error * Proportional Gain.
- *
- *      "Heading Error" is calculated by taking the difference between the desired heading and the actual heading,
- *      and then "normalizing" it by converting it to a value in the +/- 180 degree range.
- *
- *      "Proportional Gain" is a constant that YOU choose to set the "strength" of the steering response.
- *
- *  Use Android Studio to Copy this Class, and Paste it into your "TeamCode" folder with a new name.
- *  Remove or comment out the @Disabled line to add this OpMode to the Driver Station OpMode list
- */
 
-@Autonomous(name="Robot: Auto Drive By Gyro", group="Robot")
-//@Disabled
-public class RobotAutoDriveByGyro_Linear extends LinearOpMode {
+public class FarAuto extends LinearOpMode {
 
     /* Declare OpMode members. */
-    private DcMotor         leftDrive   = null;
-    private DcMotor         rightDrive  = null;
-    private IMU             imu         = null;      // Control/Expansion Hub IMU
-
+    Robot robot;
     private double          headingError  = 0;
 
     // These variable are declared here (as class members) so they can be updated in various methods,
@@ -115,9 +58,9 @@ public class RobotAutoDriveByGyro_Linear extends LinearOpMode {
     // For example, use a value of 2.0 for a 12-tooth spur gear driving a 24-tooth spur gear.
     // This is gearing DOWN for less speed and more torque.
     // For gearing UP, use a gear ratio less than 1.0. Note this will affect the direction of wheel rotation.
-    static final double     COUNTS_PER_MOTOR_REV    = 537.7 ;   // eg: GoBILDA 312 RPM Yellow Jacket
-    static final double     DRIVE_GEAR_REDUCTION    = 1.0 ;     // No External Gearing.
-    static final double     WHEEL_DIAMETER_INCHES   = 4.0 ;     // For figuring circumference
+    static final double     COUNTS_PER_MOTOR_REV    = 28 ;   // eg: Rev HD HEx motor
+    static final double     DRIVE_GEAR_REDUCTION    = 15 ;     // No External Gearing.
+    static final double     WHEEL_DIAMETER_INCHES   = 104/25.4 ;     // For figuring circumference
     static final double     COUNTS_PER_INCH         = (COUNTS_PER_MOTOR_REV * DRIVE_GEAR_REDUCTION) /
                                                       (WHEEL_DIAMETER_INCHES * 3.1415);
 
@@ -135,73 +78,99 @@ public class RobotAutoDriveByGyro_Linear extends LinearOpMode {
     static final double     P_DRIVE_GAIN           = 0.03;     // Larger is more responsive, but also less stable.
 
 
+    private Match.Alliance alliance;
+    private Match.StartingPosition startingPosition;
+
+    private Match.ShootingZone shootingZone;
+
+    public void setAlliance(Match.Alliance alliance) {
+        this.alliance = alliance;
+    }
+    public void setStartingPosition(Match.StartingPosition startingPosition) {
+        this.startingPosition = startingPosition;
+    }
+    public void setShootingZone(Match.ShootingZone shootingZone) {
+        this.shootingZone = shootingZone;
+    }
     @Override
     public void runOpMode() {
-
         // Initialize the drive system variables.
-        leftDrive  = hardwareMap.get(DcMotor.class, "leftFrontDrive");
-        rightDrive = hardwareMap.get(DcMotor.class, "rightFrontDrive");
-
-        // To drive forward, most robots need the motor on one side to be reversed, because the axles point in opposite directions.
-        // When run, this OpMode should start both motors driving forward. So adjust these two lines based on your first test drive.
-        // Note: The settings here assume direct drive on left and right wheels.  Gear Reduction or 90 Deg drives may require direction flips
-        leftDrive.setDirection(DcMotor.Direction.REVERSE);
-        rightDrive.setDirection(DcMotor.Direction.FORWARD);
-
-        /* The next two lines define Hub orientation.
-         * The Default Orientation (shown) is when a hub is mounted horizontally with the printed logo pointing UP and the USB port pointing FORWARD.
-         *
-         * To Do:  EDIT these two lines to match YOUR mounting configuration.
-         */
-        RevHubOrientationOnRobot.LogoFacingDirection logoDirection = RevHubOrientationOnRobot.LogoFacingDirection.UP;
-        RevHubOrientationOnRobot.UsbFacingDirection  usbDirection  = RevHubOrientationOnRobot.UsbFacingDirection.FORWARD;
-        RevHubOrientationOnRobot orientationOnRobot = new RevHubOrientationOnRobot(logoDirection, usbDirection);
-
-        // Now initialize the IMU with this mounting orientation
-        // This sample expects the IMU to be in a REV Hub and named "imu".
-        imu = hardwareMap.get(IMU.class, "imu");
-        imu.initialize(new IMU.Parameters(orientationOnRobot));
-        imu.resetYaw();
-
-        // Ensure the robot is stationary.  Reset the encoders and set the motors to BRAKE mode
-        leftDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        rightDrive.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-        leftDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-        rightDrive.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        robot = new Robot(hardwareMap);
+        //set turret position appropriate to the alliance
+        if (alliance == Match.Alliance.Red) {
+            robot.getTurret().setPosition(Config.TURRET_FAR_RED_POSITION);
+        }
+        else {
+            robot.getTurret().setPosition(Config.TURRET_FAR_BLUE_POSITION);
+        }
+        //raise the hood
+        robot.getHood().setPosition(0);
 
         // Wait for the game to start (Display Gyro value while waiting)
         while (opModeInInit()) {
-            telemetry.addData(">", "Robot Heading = %4.0f", getHeading());
+            telemetry.addData(">", "Robot Heading = %4.0f", robot.getHeading());
             telemetry.update();
         }
 
-        // Set the encoders for closed loop speed control, and reset the heading.
-        leftDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-        rightDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        //hold intake in place so artifacts don't roll out
+        robot.getIntake().setPower(.4);
+
+        //turn on shooter
 
 
-        // Step through each leg of the path,
-        // Notes:   Reverse movement is obtained by setting a negative distance (not speed)
-        //          holdHeading() is used after turns to let the heading stabilize
-        //          Add a sleep(2000) after any step to keep the telemetry data visible for review
+        //move away from the wall
+        if (this.shootingZone == Match.ShootingZone.NearWall) {
+            robot.getShooter().setPower(1.0);
+            driveStraight(DRIVE_SPEED, -12.0, 0.0);    // Drive backwards 48"
+            turnToHeading(turnSpeed, 0);
+        }
+        else {
+            robot.getShooter().setPower(.5);
+            robot.getTurret().setPosition(.5);
+            driveStraight(DRIVE_SPEED, -48.0, 0.0);    // Drive backwards 48
+            if (this.alliance == Match.Alliance.Red) {
+                turnToHeading(turnSpeed, -45);
+            }
+            else {
+                turnToHeading(turnSpeed, 45);
+            }
+        }
 
-        driveStraight(DRIVE_SPEED, 24.0, 0.0);    // Drive Forward 24"
-        turnToHeading( TURN_SPEED, -45.0);               // Turn  CW to -45 Degrees
-        holdHeading( TURN_SPEED, -45.0, 0.5);   // Hold -45 Deg heading for a 1/2 second
+        //shoot first artifact by turning intake on
+        robot.turnIntakeOn();
+        //wait for artifact to be shot
+        sleep(3000);
 
-        driveStraight(DRIVE_SPEED, 17.0, -45.0);  // Drive Forward 17" at -45 degrees (12"x and 12"y)
-        turnToHeading( TURN_SPEED,  45.0);               // Turn  CCW  to  45 Degrees
-        holdHeading( TURN_SPEED,  45.0, 0.5);    // Hold  45 Deg heading for a 1/2 second
+        //shoot second artifact by pushing two artifacts with the transfer
+        robot.setTransferPosition(150);
+        //wait for artifact to be shot
+        sleep(3000);
 
-        driveStraight(DRIVE_SPEED, 17.0, 45.0);  // Drive Forward 17" at 45 degrees (-12"x and 12"y)
-        turnToHeading( TURN_SPEED,   0.0);               // Turn  CW  to 0 Degrees
-        holdHeading( TURN_SPEED,   0.0, 1.0);    // Hold  0 Deg heading for 1 second
+        //shoot third artifact by pushing one artifact with the transfer
+        robot.setTransferPosition(200);
 
-        driveStraight(DRIVE_SPEED,-48.0, 0.0);    // Drive in Reverse 48" (should return to approx. staring position)
+        //retract transfer
+        robot.setTransferPosition(0);
+
+        //stop shooter
+        robot.getShooter().setPower(0);
+
+        //stop intake
+        robot.getIntake().setPower(0);
+
+        //move away from the launch area
+        if (this.shootingZone == Match.ShootingZone.NearWall) {
+            driveStraight(DRIVE_SPEED, -24.0, 0.0);    // Drive backwards 24"
+        }
+        else {
+            turnToHeading(turnSpeed, 0);
+            // Drive forwards 24" to clear launch area
+            driveStraight(DRIVE_SPEED, 24.0, 0.0);
+        }
 
         telemetry.addData("Path", "Complete");
         telemetry.update();
-        sleep(1000);  // Pause to display last telemetry message.
+        sleep(20000);  // Pause to display last telemetry message.
     }
 
     /*
@@ -231,18 +200,30 @@ public class RobotAutoDriveByGyro_Linear extends LinearOpMode {
 
         // Ensure that the OpMode is still active
         if (opModeIsActive()) {
+            robot.getFrontLeftDrive().setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            robot.getFrontRightDrive().setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            robot.getBackLeftDrive().setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+            robot.getBackRightDrive().setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
+
+
+            robot.getFrontLeftDrive().setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            robot.getFrontRightDrive().setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            robot.getBackLeftDrive().setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            robot.getBackRightDrive().setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
             // Determine new target position, and pass to motor controller
-            int moveCounts = (int)(distance * COUNTS_PER_INCH);
-            leftTarget = leftDrive.getCurrentPosition() + moveCounts;
-            rightTarget = rightDrive.getCurrentPosition() + moveCounts;
-
+            int moveCounts = (int) (distance * COUNTS_PER_INCH);
+            leftTarget = rightTarget = moveCounts;
             // Set Target FIRST, then turn on RUN_TO_POSITION
-            leftDrive.setTargetPosition(leftTarget);
-            rightDrive.setTargetPosition(rightTarget);
+            robot.getFrontLeftDrive().setTargetPosition(moveCounts);
+            robot.getFrontRightDrive().setTargetPosition(moveCounts);
+            robot.getBackLeftDrive().setTargetPosition(moveCounts);
+            robot.getBackRightDrive().setTargetPosition(moveCounts);
 
-            leftDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
-            rightDrive.setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            robot.getFrontLeftDrive().setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            robot.getFrontRightDrive().setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            robot.getBackLeftDrive().setMode(DcMotor.RunMode.RUN_TO_POSITION);
+            robot.getBackRightDrive().setMode(DcMotor.RunMode.RUN_TO_POSITION);
 
             // Set the required driving speed  (must be positive for RUN_TO_POSITION)
             // Start driving straight, and then enter the control loop
@@ -251,7 +232,7 @@ public class RobotAutoDriveByGyro_Linear extends LinearOpMode {
 
             // keep looping while we are still active, and BOTH motors are running.
             while (opModeIsActive() &&
-                   (leftDrive.isBusy() && rightDrive.isBusy())) {
+                   (robot.getFrontLeftDrive().isBusy() && robot.getFrontRightDrive().isBusy())) {
 
                 // Determine required steering to keep on heading
                 turnSpeed = getSteeringCorrection(heading, P_DRIVE_GAIN);
@@ -268,9 +249,7 @@ public class RobotAutoDriveByGyro_Linear extends LinearOpMode {
             }
 
             // Stop all motion & Turn off RUN_TO_POSITION
-            moveRobot(0, 0);
-            leftDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
-            rightDrive.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            robot.stop();
         }
     }
 
@@ -363,7 +342,7 @@ public class RobotAutoDriveByGyro_Linear extends LinearOpMode {
         targetHeading = desiredHeading;  // Save for telemetry
 
         // Determine the heading current error
-        headingError = targetHeading - getHeading();
+        headingError = targetHeading - robot.getHeading();
 
         // Normalize the error to be within +/- 180 degrees
         while (headingError > 180)  headingError -= 360;
@@ -394,8 +373,11 @@ public class RobotAutoDriveByGyro_Linear extends LinearOpMode {
             rightSpeed /= max;
         }
 
-        leftDrive.setPower(leftSpeed);
-        rightDrive.setPower(rightSpeed);
+        robot.getFrontRightDrive().setPower(rightSpeed);
+        robot.getFrontLeftDrive().setPower(leftSpeed);
+        robot.getBackRightDrive().setPower(rightSpeed);
+        robot.getBackLeftDrive().setPower(leftSpeed);
+
     }
 
     /**
@@ -407,24 +389,26 @@ public class RobotAutoDriveByGyro_Linear extends LinearOpMode {
 
         if (straight) {
             telemetry.addData("Motion", "Drive Straight");
-            telemetry.addData("Target Pos L:R",  "%7d:%7d",      leftTarget,  rightTarget);
-            telemetry.addData("Actual Pos L:R",  "%7d:%7d",      leftDrive.getCurrentPosition(),
-                    rightDrive.getCurrentPosition());
+            telemetry.addData("Target Pos L:R",  "%7d:%7d",
+                    leftTarget,  rightTarget);
+            telemetry.addData("Actual Pos LF:RF:LB:RB",
+                    "%7d->%7d:%7d->%7d:%7d->%7d:%7d->%7d",
+                    robot.getFrontLeftDrive().getCurrentPosition(),
+                    robot.getFrontLeftDrive().getTargetPosition(),
+                    robot.getFrontRightDrive().getCurrentPosition(),
+                    robot.getFrontRightDrive().getTargetPosition(),
+                    robot.getBackLeftDrive().getCurrentPosition(),
+                    robot.getBackLeftDrive().getTargetPosition(),
+                    robot.getBackRightDrive().getCurrentPosition(),
+                    robot.getBackRightDrive().getTargetPosition()
+            );
         } else {
             telemetry.addData("Motion", "Turning");
         }
 
-        telemetry.addData("Heading- Target : Current", "%5.2f : %5.0f", targetHeading, getHeading());
+        telemetry.addData("Heading- Target : Current", "%5.2f : %5.0f", targetHeading, robot.getHeading());
         telemetry.addData("Error  : Steer Pwr",  "%5.1f : %5.1f", headingError, turnSpeed);
-        telemetry.addData("Wheel Speeds L : R", "%5.2f : %5.2f", leftSpeed, rightSpeed);
+        telemetry.addData("Wheel Speeds LF : RF : LR : RR", "%5.2f : %5.2f", leftSpeed, rightSpeed);
         telemetry.update();
-    }
-
-    /**
-     * read the Robot heading directly from the IMU (in degrees)
-     */
-    public double getHeading() {
-        YawPitchRollAngles orientation = imu.getRobotYawPitchRollAngles();
-        return orientation.getYaw(AngleUnit.DEGREES);
     }
 }
