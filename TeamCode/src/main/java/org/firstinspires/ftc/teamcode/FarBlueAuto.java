@@ -1,6 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
-@com.qualcomm.robotcore.eventloop.opmode.Autonomous(name="Far Blue Auto", group="Jr")
+@com.qualcomm.robotcore.eventloop.opmode.Autonomous(name="Far Blue", group="Jr")
 //@Disabled
 public class FarBlueAuto extends Autonomous {
     @Override

@@ -1,6 +1,8 @@
 package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
@@ -149,11 +151,11 @@ public class Robot {
         return orientation.getYaw(AngleUnit.DEGREES);
     }
 
-    public void setIntakePosition(int position) {
-        setMotorPosition(position, intake);
+    public void setIntakePosition(int position, LinearOpMode opMode) {
+        setMotorPosition(position, intake, opMode);
     }
-    public void setTransferPosition(int position) {
-        setMotorPosition(position, transfer);
+    public void setTransferPosition(int position, Autonomous autonomous) {
+        setMotorPosition(position, transfer, autonomous);
     }
     public void turnIntakeOn() {
         this.intake.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -167,11 +169,14 @@ public class Robot {
         this.intake.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         this.intake.setPower(-1);
     }
-    private void setMotorPosition(int position, DcMotor motor) {
+    private void setMotorPosition(int position, DcMotor motor, LinearOpMode opMode) {
         motor.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         motor.setTargetPosition(position);
         motor.setMode(DcMotor.RunMode.RUN_TO_POSITION);
         motor.setPower(1);
+        while (opMode.opModeIsActive() && motor.isBusy()) {
+            opMode.sleep(100);
+        }
     }
     public void freeMotorsForTeleOp() {
         for (DcMotor motor: dcMotors) {

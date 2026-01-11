@@ -1,12 +1,12 @@
 package org.firstinspires.ftc.teamcode;
 
-@com.qualcomm.robotcore.eventloop.opmode.Autonomous(name="Mid Red", group="Jr")
+@com.qualcomm.robotcore.eventloop.opmode.Autonomous(name="Depot Red", group="Jr")
 //@Disabled
-public class MidRedAuto extends Autonomous {
+public class DepotRedAuto extends Autonomous {
     @Override
     public void runOpMode() {
         super.setAlliance(Match.Alliance.Red);
-        super.setStartingPosition(Match.StartingPosition.Audience);
+        super.setStartingPosition(Match.StartingPosition.Depot);
         super.setShootingZone(Match.ShootingZone.NearDepot);
         super.runOpMode();
     }

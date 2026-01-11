@@ -34,12 +34,14 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.robotcore.util.Range;
 
+import androidx.annotation.NonNull;
+
 
 public class Autonomous extends LinearOpMode {
 
     /* Declare OpMode members. */
     Robot robot;
-    private double          headingError  = 0;
+    private static double          headingError  = 0;
 
     // These variable are declared here (as class members) so they can be updated in various methods,
     // but still be displayed by sendTelemetry()
@@ -65,7 +67,7 @@ public class Autonomous extends LinearOpMode {
 
     // These constants define the desired driving/control characteristics
     // They can/should be tweaked to suit the specific robot drive train.
-    static final double     DRIVE_SPEED             = 0.4;     // Max driving speed for better distance accuracy.
+    static final double     DRIVE_SPEED             = 0.8;     // Max driving speed for better distance accuracy.
     static final double     TURN_SPEED              = 0.2;     // Max turn speed to limit turn rate.
     static final double     HEADING_THRESHOLD       = 1.0 ;    // How close must the heading get to the target before moving to next step.
                                                                // Requiring more accuracy (a smaller number) will often make the turn take longer to get into the final position.
@@ -82,6 +84,8 @@ public class Autonomous extends LinearOpMode {
 
     private Match.ShootingZone shootingZone;
 
+    private double delay = 0;
+
     public void setAlliance(Match.Alliance alliance) {
         this.alliance = alliance;
     }
@@ -95,83 +99,118 @@ public class Autonomous extends LinearOpMode {
     public void runOpMode() {
         // Initialize the drive system variables.
         robot = new Robot(hardwareMap);
-        //set turret position appropriate to the alliance
-        if (alliance == Match.Alliance.Red) {
-            robot.getTurret().setPosition(Config.TURRET_FAR_RED_POSITION);
-        }
-        else {
-            robot.getTurret().setPosition(Config.TURRET_FAR_BLUE_POSITION);
-        }
-        //raise the hood
-        robot.getHood().setPosition(0);
-
         // Wait for the game to start (Display Gyro value while waiting)
         while (opModeInInit()) {
+            if (gamepad1.dpad_down || gamepad2.dpad_down) {
+                delay = Math.max(delay-.01, 0);
+            }
+            else if (gamepad1.dpad_up || gamepad2.dpad_up) {
+                delay = Math.min(delay+.01, 10);
+            }
             telemetry.addData(">", "Robot Heading = %4.0f", robot.getHeading());
+            telemetry.addData(">", "Delay (max 10 seconds) = %.2f", delay);
             telemetry.update();
         }
 
-        //hold intake in place so artifacts don't roll out
-        robot.getIntake().setPower(.4);
-
-        //turn on shooter
-
-
-        //move away from the wall
-        if (this.shootingZone == Match.ShootingZone.NearWall) {
-            robot.getShooter().setPower(1.0);
-            driveStraight(DRIVE_SPEED, -12.0, 0.0);    // Drive backwards 48"
-            turnToHeading(turnSpeed, 0);
+        if (delay > 0) {
+            sleep((long)delay*1000);
         }
-        else {
-            robot.getShooter().setPower(.5);
-            robot.getTurret().setPosition(.5);
-            driveStraight(DRIVE_SPEED, -48.0, 0.0);    // Drive backwards 48
-            if (this.alliance == Match.Alliance.Red) {
-                turnToHeading(turnSpeed, -45);
-            }
-            else {
-                turnToHeading(turnSpeed, 45);
-            }
-        }
+        //find the appropriate shooting setup
+        ShootingConfiguration shootingConfiguration = getShootingConfiguration();
+        //get robot to shooting position
+        assumeShootingStance(shootingConfiguration);
 
         //shoot first artifact by turning intake on
         robot.turnIntakeOn();
         //wait for artifact to be shot
-        sleep(3000);
+        sleep(5000);
 
         //shoot second artifact by pushing two artifacts with the transfer
-        robot.setTransferPosition(150);
-        //wait for artifact to be shot
+        robot.setTransferPosition(120, this);
+        //shoot third artifact by pushing one artifact with the transfer
+        robot.setTransferPosition(0, this);
+        robot.setTransferPosition(600, this);
         sleep(3000);
 
-        //shoot third artifact by pushing one artifact with the transfer
-        robot.setTransferPosition(200);
-
         //retract transfer
-        robot.setTransferPosition(0);
-
+        robot.setTransferPosition(0, this);
         //stop shooter
         robot.getShooter().setPower(0);
-
         //stop intake
         robot.getIntake().setPower(0);
+        //set hood to teleop position
+        robot.getHood().setPosition(Config.HOOD_INITIAL_POSITION);
 
-        //move away from the launch area
-        if (this.shootingZone == Match.ShootingZone.NearWall) {
-            driveStraight(DRIVE_SPEED, -24.0, 0.0);    // Drive backwards 24"
-        }
-        else {
-            turnToHeading(turnSpeed, 0);
-            // Drive forwards 24" to clear launch area
-            driveStraight(DRIVE_SPEED, 24.0, 0.0);
-        }
+        LeaveConfiguration leaveConfiguration = getLeaveConfiguration();
+        assumeLeaveStance(leaveConfiguration);
 
         telemetry.addData("Path", "Complete");
         telemetry.update();
         sleep(20000);  // Pause to display last telemetry message.
     }
 
+    @NonNull
+    private ShootingConfiguration getShootingConfiguration() {
+        ShootingConfiguration shootingConfiguration = null;
+        if (alliance == Match.Alliance.Red) {
+            if (startingPosition == Match.StartingPosition.Audience) {
+                if (shootingZone == Match.ShootingZone.NearWall) {
+                    shootingConfiguration = Config.redFarShootingConfiguration;
+                }
+                else {
+                    shootingConfiguration = Config.redMidShootingConfiguration;
+                }
+            }
+            else {
+                shootingConfiguration = Config.redDepotShootingConfiguration;
+            }
+        }
+        else {
+            if (startingPosition == Match.StartingPosition.Audience) {
+                if (shootingZone == Match.ShootingZone.NearWall) {
+                    shootingConfiguration = Config.blueFarShootingConfiguration;
+                }
+                else {
+                    shootingConfiguration = Config.blueMidShootingConfiguration;
+                }
+            }
+            else {
+                shootingConfiguration = Config.blueDepotShootingConfiguration;
+            }
+        }
+        return shootingConfiguration;
+    }
+    @NonNull
+    private LeaveConfiguration getLeaveConfiguration() {
+        LeaveConfiguration leaveConfiguration = null;
+        if (alliance == Match.Alliance.Red) {
+            if (startingPosition == Match.StartingPosition.Audience) {
+                if (shootingZone == Match.ShootingZone.NearWall) {
+                    leaveConfiguration = Config.redFarLeaveConfiguration;
+                }
+                else {
+                    leaveConfiguration = Config.redMidLeaveConfiguration;
+                }
+            }
+            else {
+                leaveConfiguration = Config.redDepotLeaveConfiguration;
+            }
+        }
+        else {
+            if (startingPosition == Match.StartingPosition.Audience) {
+                if (shootingZone == Match.ShootingZone.NearWall) {
+                    leaveConfiguration = Config.blueFarLeaveConfiguration;
+                }
+                else {
+                    leaveConfiguration = Config.blueMidLeaveConfiguration;
+                }
+            }
+            else {
+                leaveConfiguration = Config.blueDepotLeaveConfiguration;
+            }
+        }
+        return leaveConfiguration;
+    }
     /*
      * ====================================================================================================
      * Driving "Helper" functions are below this line.
@@ -267,6 +306,10 @@ public class Autonomous extends LinearOpMode {
      *              If a relative angle is required, add/subtract from current heading.
      */
     public void turnToHeading(double maxTurnSpeed, double heading) {
+        robot.getFrontLeftDrive().setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        robot.getFrontRightDrive().setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        robot.getBackLeftDrive().setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+        robot.getBackRightDrive().setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
         // Run getSteeringCorrection() once to pre-calculate the current error
         getSteeringCorrection(heading, P_DRIVE_GAIN);
@@ -409,5 +452,17 @@ public class Autonomous extends LinearOpMode {
         telemetry.addData("Error  : Steer Pwr",  "%5.1f : %5.1f", headingError, turnSpeed);
         telemetry.addData("Wheel Speeds LF : RF : LR : RR", "%5.2f : %5.2f", leftSpeed, rightSpeed);
         telemetry.update();
+    }
+
+    public void assumeShootingStance(ShootingConfiguration configuration) {
+        robot.getShooter().setPower(configuration.getShooterSpeed());
+        robot.getHood().setPosition(configuration.getHoodPosition());
+        robot.getTurret().setPosition(configuration.getTurretPosition());
+        driveStraight(.4, configuration.getInitialMovement(), 0);
+        turnToHeading(.4, configuration.getHeading());
+    }
+    public void assumeLeaveStance(LeaveConfiguration configuration) {
+        turnToHeading(.4, configuration.getHeading());
+        driveStraight(.4, configuration.getDistance(), configuration.getHeading());
     }
 }
