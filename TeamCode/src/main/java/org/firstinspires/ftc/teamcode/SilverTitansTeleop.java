@@ -31,17 +31,12 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.DcMotor;
-import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-import java.util.Locale;
-
-import static org.firstinspires.ftc.teamcode.Config.HOOD_INITIAL_POSITION;
+import static org.firstinspires.ftc.teamcode.Config.POWER_INCREMENT;
 import static org.firstinspires.ftc.teamcode.Config.SERVO_INCREMENT;
-import static org.firstinspires.ftc.teamcode.Config.TURRET_INITIAL_POSITION;
 
-@TeleOp(name="Teleop v2", group="Junior")
+@TeleOp(name="Teleop", group="Curry")
 ///@Disabled
 public class SilverTitansTeleop extends LinearOpMode {
 
@@ -53,9 +48,9 @@ public class SilverTitansTeleop extends LinearOpMode {
 
     @Override
     public void runOpMode() {
-        Robot robot = new Robot(hardwareMap);
+        boolean runAutomated = false;
+        Robot robot = new Robot(hardwareMap, this);
         robot.freeMotorsForTeleOp();
-        double intakePower, shooterPower;
 
         // Wait for the game to start (driver presses START)
         telemetry.addData("Status", "Initialized");
@@ -66,6 +61,9 @@ public class SilverTitansTeleop extends LinearOpMode {
 
         // run until the end of the match (driver presses STOP)
         while (opModeIsActive()) {
+
+            if (gamepad1.x) {
+            }
             double max;
 
             // POV Mode uses left joystick to go forward & strafe, and right joystick to rotate.
@@ -94,46 +92,39 @@ public class SilverTitansTeleop extends LinearOpMode {
             }
 
             // Send calculated power to wheels
-            robot.driveWithPowers(frontLeftPower, frontRightPower, backLeftPower, backRightPower);
+            if (!runAutomated) {
+                robot.driveWithPowers(frontLeftPower, frontRightPower, backLeftPower, backRightPower);
+            }
 
             //handle control of intake using the a, b and y buttons of gamepad 2
             if (gamepad2.b) {
-                intakePower = 1;
-                robot.getIntake().setPower(intakePower);
+                robot.setIntakePower(1);
             }
             else if (gamepad2.a) {
-                intakePower = 0;
-                robot.getIntake().setPower(intakePower);
+                robot.lockIntake(this);
             }
             else if (gamepad2.x) {
-                intakePower = -1;
-                robot.getIntake().setPower(intakePower);
+                robot.setIntakePower(-1);
             }
-            else {
-                intakePower = robot.getIntake().getPower();
-            }
-
             //handle control of shooter motor using up and down buttons of gamepad 2
             if (gamepad2.dpad_up) {
-                shooterPower = 1;
-                robot.getShooter().setPower(1);
+                robot.getShooter().setPower(1.0);
             }
             else if (gamepad2.dpad_down) {
-                shooterPower = 0;
                 robot.getShooter().setPower(0);
             }
             else if (gamepad2.dpad_left) {
-                shooterPower = .75;
-                robot.getShooter().setPower(0.75);
+                robot.getShooter().setPower(0.7);
             }
             else if (gamepad2.dpad_right) {
-                shooterPower = .5;
-                robot.getShooter().setPower(0.5);
+                robot.getShooter().setPower(0.4);
             }
-            else {
-                shooterPower = robot.getShooter().getPower();
+            else if (gamepad2.left_bumper) {
+                robot.getShooter().setPower(robot.getShooter().getPower() - POWER_INCREMENT);
             }
-
+            else if (gamepad2.right_bumper) {
+                robot.getShooter().setPower(robot.getShooter().getPower() + POWER_INCREMENT);
+            }
             //handle control of transfer using right stick of game pad 2
             robot.getTransfer().setPower(-gamepad2.right_stick_y);
 
@@ -152,18 +143,7 @@ public class SilverTitansTeleop extends LinearOpMode {
                 robot.getHood().setPosition(robot.getHood().getPosition()  - SERVO_INCREMENT);
             }
 
-            // Show the elapsed game time and wheel power.
-            telemetry.addData("Status", "Run Time: " + runtime.toString());
-            telemetry.addData("Front left/Right", "%4.2f, %4.2f", frontLeftPower, frontRightPower);
-            telemetry.addData("Back  left/Right", "%4.2f, %4.2f", backLeftPower, backRightPower);
-            telemetry.addData("Transfer", "%d->%d@%.2f",
-                    robot.getTransfer().getCurrentPosition(), robot.getTransfer().getTargetPosition(), robot.getTransfer().getPower());
-            telemetry.addData("Intake / Shooter", "%d->%d@%.2f, %d->%d@%.2f",
-                    robot.getIntake().getCurrentPosition(), robot.getIntake().getTargetPosition(), intakePower,
-                    robot.getShooter().getCurrentPosition(), robot.getShooter().getTargetPosition(), shooterPower);
-            telemetry.addData("Hood / Turret", "%4.2f, %4.2f",
-                    robot.getHood().getPosition(), robot.getTurret().getPosition());
-            telemetry.update();
+            robot.showTelemetry(telemetry, robot.getHeading());
         }
     }
 }
